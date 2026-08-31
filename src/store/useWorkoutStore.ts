@@ -69,6 +69,10 @@ interface WorkoutStoreState {
   createCustomGoal: (
     goal: Omit<FitnessGoal, 'id' | 'createdAt' | 'isCompleted'>
   ) => void;
+  updateGoal: (
+    goalId: string,
+    updates: Omit<FitnessGoal, 'id' | 'createdAt' | 'isCompleted'>
+  ) => void;
   deleteGoal: (goalId: string) => void;
   getWeeklyGoalProgress: () => WeeklyGoalProgress;
   addWorkout: (
@@ -277,6 +281,26 @@ export const useWorkoutStore = create<WorkoutStoreState>((set, get) => ({
     });
 
     persistState(profile, newGoal, updatedGoals, newQueue, history);
+  },
+
+  updateGoal: (goalId: string, updates: Omit<FitnessGoal, 'id' | 'createdAt' | 'isCompleted'>) => {
+    const { savedGoals, activeGoal, profile, queue, history } = get();
+    const now = new Date().toISOString();
+    const updatedGoal: FitnessGoal = {
+      ...updates,
+      id: goalId,
+      createdAt: savedGoals.find((g) => g.id === goalId)?.createdAt || now,
+      isCompleted: savedGoals.find((g) => g.id === goalId)?.isCompleted || false
+    };
+    const updatedGoals = savedGoals.map((g) => g.id === goalId ? updatedGoal : g);
+    const isActive = activeGoal.id === goalId;
+    const newQueue = isActive ? generateQueueForGoal(updatedGoal) : queue;
+    set({
+      savedGoals: updatedGoals,
+      activeGoal: isActive ? updatedGoal : activeGoal,
+      queue: isActive ? newQueue : queue
+    });
+    persistState(profile, isActive ? updatedGoal : activeGoal, updatedGoals, isActive ? newQueue : queue, history);
   },
 
   deleteGoal: (goalId: string) => {

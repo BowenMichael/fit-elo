@@ -50,6 +50,28 @@ export function calculateGoalTargetElo(
   return Math.max(900, Math.min(2400, finalElo));
 }
 
+/**
+ * Computes the cumulative week multiplier based on week-over-week % increases.
+ */
+export function calculateWeekMultiplier(
+  weekNumber: number,
+  overloadRate: number = 0.05,
+  customWeeklyOverloads?: number[]
+): number {
+  if (weekNumber <= 1) return 1.0;
+
+  if (customWeeklyOverloads && customWeeklyOverloads.length > 0) {
+    let multiplier = 1.0;
+    for (let w = 1; w < weekNumber; w++) {
+      const stepRate = customWeeklyOverloads[w - 1] ?? overloadRate;
+      multiplier *= (1.0 + stepRate);
+    }
+    return multiplier;
+  }
+
+  return 1.0 + (weekNumber - 1) * overloadRate;
+}
+
 export const DEFAULT_10K_EXERCISES: GoalExerciseTemplate[] = [
   {
     id: 'ex-10k-1',
@@ -292,7 +314,6 @@ export function generateQueueForGoal(
   const templates = goal.exerciseTemplates || DEFAULT_10K_EXERCISES;
   const queue: WorkoutItem[] = [];
   const overloadRate = goal.progressiveOverloadRate ?? 0.05;
-  const baseWeeklyVolume = templates.reduce((sum, ex) => sum + ex.baseTargetValue, 0);
 
   // Mode A: Weekly Monday–Sunday Schedule
   if (goal.scheduleMode === 'weekly') {
@@ -306,11 +327,11 @@ export function generateQueueForGoal(
     let previousAbsoluteDay = 0;
 
     for (let week = 1; week <= goal.totalWeeks; week++) {
-      // Determine week multiplier: from customWeeklyTargets if available, or progressive overload %
-      let weekMultiplier = 1.0 + (week - 1) * overloadRate;
-      if (goal.customWeeklyTargets && goal.customWeeklyTargets[week - 1] && baseWeeklyVolume > 0) {
-        weekMultiplier = goal.customWeeklyTargets[week - 1] / baseWeeklyVolume;
-      }
+      const weekMultiplier = calculateWeekMultiplier(
+        week,
+        overloadRate,
+        goal.customWeeklyOverloads
+      );
 
       sortedTemplates.forEach((template, sessionIndex) => {
         const isFinalSession = week === goal.totalWeeks && sessionIndex === sortedTemplates.length - 1;
@@ -364,10 +385,11 @@ export function generateQueueForGoal(
   // Mode B: Custom Queue Mode (Sequential relative gaps)
   let cumulativeDays = 0;
   for (let week = 1; week <= goal.totalWeeks; week++) {
-    let weekMultiplier = 1.0 + (week - 1) * overloadRate;
-    if (goal.customWeeklyTargets && goal.customWeeklyTargets[week - 1] && baseWeeklyVolume > 0) {
-      weekMultiplier = goal.customWeeklyTargets[week - 1] / baseWeeklyVolume;
-    }
+    const weekMultiplier = calculateWeekMultiplier(
+      week,
+      overloadRate,
+      goal.customWeeklyOverloads
+    );
 
     templates.forEach((template, sessionIndex) => {
       const isFinalSession = week === goal.totalWeeks && sessionIndex === templates.length - 1;
@@ -438,14 +460,17 @@ export function calculateWeeklyGoalProgress(
     return sum + vol;
   }, 0);
 
-  // Compute current week's target volume (accounting for custom weekly targets or overload rate)
-  let targetVolumeThisWeek = activeGoal.weeklyVolumeTarget || 12.0;
-  if (activeGoal.customWeeklyTargets && activeGoal.customWeeklyTargets[currentWeekNumber - 1]) {
-    targetVolumeThisWeek = activeGoal.customWeeklyTargets[currentWeekNumber - 1];
-  } else if (activeGoal.progressiveOverloadRate) {
-    const mult = 1.0 + (currentWeekNumber - 1) * activeGoal.progressiveOverloadRate;
-    targetVolumeThisWeek = Math.round((activeGoal.weeklyVolumeTarget || 12.0) * mult * 10) / 10;
-  }
+  // Compute current week's target volume using week-over-week multiplier
+  const overloadRate = activeGoal.progressiveOverloadRate ?? 0.05;
+  const weekMultiplier = calculateWeekMultiplier(
+    currentWeekNumber,
+    overloadRate,
+    activeGoal.customWeeklyOverloads
+  );
+
+  const targetVolumeThisWeek = Math.round(
+    (activeGoal.weeklyVolumeTarget || 12.0) * weekMultiplier * 10
+  ) / 10;
 
   let weekStatus: WeeklyGoalProgress['weekStatus'] = 'ON_TRACK';
   if (completedSessionsThisWeek >= targetSessionsThisWeek && completedVolumeThisWeek >= targetVolumeThisWeek) {

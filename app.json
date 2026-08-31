@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "Expo Fullstack Starter",
-    "slug": "expo-fullstack-starter",
-    "scheme": "expo-fullstack-starter",
-    "version": "1.0.0",
+    "name": "FitElo",
+    "slug": "fit-elo",
+    "scheme": "fit-elo",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -11,14 +11,14 @@
     "ios": {
       "jsEngine": "jsc",
       "supportsTablet": true,
-      "bundleIdentifier": "com.example.expofullstackstarter",
+      "bundleIdentifier": "com.fitelo.app",
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.example.expofullstackstarter",
+      "package": "com.fitelo.app",
       "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#121214",

@@ -27,15 +27,29 @@ import { useAppTheme } from '../store/useThemeStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { Haptics } from '../utils/haptics';
 
+// Pencil edit icon
+const PencilIcon: React.FC<{ size?: number; color?: string }> = ({ size = 18, color = '#FFF' }) => (
+  <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+    <Text style={{ fontSize: size * 0.85, color }}>✏️</Text>
+  </View>
+);
+
 export const GoalsScreen: React.FC = () => {
   const { theme } = useAppTheme();
   const profile = useWorkoutStore((state) => state.profile);
   const activeGoal = useWorkoutStore((state) => state.activeGoal);
+  const savedGoals = useWorkoutStore((state) => state.savedGoals);
   const setActiveGoal = useWorkoutStore((state) => state.setActiveGoal);
   const createCustomGoal = useWorkoutStore((state) => state.createCustomGoal);
+  const updateGoal = useWorkoutStore((state) => state.updateGoal);
   const getWeeklyGoalProgress = useWorkoutStore((state) => state.getWeeklyGoalProgress);
 
   const [isWizardVisible, setIsWizardVisible] = useState(false);
+  const [editGoalId, setEditGoalId] = useState<string | null>(null);
+
+  const editGoal = editGoalId
+    ? savedGoals.find((g) => g.id === editGoalId)
+    : undefined;
 
   const weeklyProgress = getWeeklyGoalProgress();
   const currentRank = getRankTierInfo(profile.eloRating);
@@ -44,6 +58,18 @@ export const GoalsScreen: React.FC = () => {
   const handleSelectGoal = (goal: FitnessGoal) => {
     Haptics.notification('success');
     setActiveGoal(goal, true);
+  };
+
+  const handleEditGoal = (goal: FitnessGoal) => {
+    Haptics.impact('medium');
+    setEditGoalId(goal.id);
+    setIsWizardVisible(true);
+  };
+
+  const handleCreateNew = () => {
+    Haptics.impact('medium');
+    setEditGoalId(null);
+    setIsWizardVisible(true);
   };
 
   const getCategoryIcon = (cat: WorkoutCategory) => {
@@ -70,6 +96,11 @@ export const GoalsScreen: React.FC = () => {
       )
     )
   );
+
+  const wizardCloseHandler = () => {
+    setIsWizardVisible(false);
+    setEditGoalId(null);
+  };
 
   return (
     <View style={[styles.screenContainer, { backgroundColor: theme.colors.background }]}>
@@ -127,6 +158,15 @@ export const GoalsScreen: React.FC = () => {
                   </Text>
                 </View>
               </View>
+
+              {/* Edit Button */}
+              <TouchableOpacity
+                style={[styles.editGoalBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
+                onPress={() => handleEditGoal(activeGoal)}
+              >
+                <Text style={{ fontSize: 13 }}>✏️</Text>
+                <Text style={[styles.editGoalBtnText, { color: theme.colors.textSecondary }]}>Edit</Text>
+              </TouchableOpacity>
             </View>
 
             <Text style={[styles.goalDescText, { color: theme.colors.textSecondary }]}>
@@ -275,10 +315,7 @@ export const GoalsScreen: React.FC = () => {
               ...theme.shadows.glowPrimary
             }
           ]}
-          onPress={() => {
-            Haptics.impact('medium');
-            setIsWizardVisible(true);
-          }}
+          onPress={handleCreateNew}
         >
           <View style={styles.wizardLauncherLeft}>
             <View style={[styles.wizardIconWrap, { backgroundColor: theme.colors.primarySubtle }]}>
@@ -307,7 +344,7 @@ export const GoalsScreen: React.FC = () => {
         </View>
 
         <View style={styles.blueprintsGrid}>
-          {CURATED_GOAL_BLUEPRINTS.map((blueprint) => {
+          {savedGoals.map((blueprint) => {
             const isCurrentActive = activeGoal?.id === blueprint.id;
             const rank = getRankTierInfo(blueprint.targetElo);
 
@@ -341,16 +378,27 @@ export const GoalsScreen: React.FC = () => {
                     </View>
                   </View>
 
-                  {isCurrentActive && (
-                    <View
-                      style={[
-                        styles.activeCheckBadge,
-                        { backgroundColor: theme.colors.primary }
-                      ]}
+                  <View style={styles.blueprintActions}>
+                    {isCurrentActive && (
+                      <View
+                        style={[
+                          styles.activeCheckBadge,
+                          { backgroundColor: theme.colors.primary }
+                        ]}
+                      >
+                        <CheckIcon size={14} color="#FFFFFF" />
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.editBlueprintBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleEditGoal(blueprint);
+                      }}
                     >
-                      <CheckIcon size={14} color="#FFFFFF" />
-                    </View>
-                  )}
+                      <Text style={{ fontSize: 11 }}>✏️</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <Text style={[styles.blueprintDesc, { color: theme.colors.textSecondary }]}>
@@ -369,11 +417,13 @@ export const GoalsScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      {/* Goal Creation Wizard Modal */}
+      {/* Goal Wizard Modal — create new or edit existing */}
       <GoalWizardModal
         visible={isWizardVisible}
-        onClose={() => setIsWizardVisible(false)}
+        onClose={wizardCloseHandler}
         onSaveGoal={(goalData) => createCustomGoal(goalData)}
+        editGoal={editGoal}
+        onUpdateGoal={(goalId, goalData) => updateGoal(goalId, goalData)}
       />
     </View>
   );
@@ -646,6 +696,32 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  blueprintActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  editBlueprintBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  editGoalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1
+  },
+  editGoalBtnText: {
+    fontSize: 11,
+    fontWeight: '700'
   },
   blueprintDesc: {
     fontSize: 12,

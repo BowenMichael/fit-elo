@@ -1,4 +1,4 @@
-export type WorkoutMetric = 'miles' | 'km' | 'minutes' | 'seconds' | 'reps' | 'sets';
+export type WorkoutMetric = 'miles' | 'km' | 'minutes' | 'seconds' | 'reps' | 'sets' | 'lbs' | 'kg';
 
 export type WorkoutStatus = 'PENDING' | 'IN_GRACE' | 'COMPLETED' | 'DOWNGRADED';
 
@@ -25,13 +25,13 @@ export interface FitnessGoal {
   description: string;
   category: WorkoutCategory;
   targetMetric: WorkoutMetric;
-  targetValue: number;          // Pinnacle target e.g. 6.21 miles (10K) or 13.1 miles (Half Marathon)
-  targetElo: number;            // App-determined Target MMR (e.g. 1471 for 10K)
-  totalWeeks: number;           // Total duration in weeks (e.g. 4, 8, 12)
+  targetValue: number;          // Pinnacle target e.g. 315 lbs, 6.21 miles, or 13.1 miles
+  targetElo: number;            // App-determined Target MMR (e.g. 1610 for 315 lb bench, 1471 for 10K)
+  totalWeeks: number;           // Total duration in weeks (e.g. 4, 6, 8, 12)
   weeklySessionsTarget: number; // e.g. 4 sessions/week
-  weeklyVolumeTarget: number;   // e.g. 12.0 miles/week
-  progressiveOverloadRate?: number; // e.g. 0.05 (+5% per week)
-  customWeeklyTargets?: number[];   // Optional custom volume targets per week [10.0, 11.5, 13.0, 15.0]
+  weeklyVolumeTarget: number;   // e.g. 12.0 miles/week or 2400 lbs total working volume
+  progressiveOverloadRate?: number; // Custom week-over-week % increase (e.g. 0.05 for +5%/wk)
+  customWeeklyOverloads?: number[]; // Optional per-step week-over-week % increases [0.05, 0.08, 0.10]
   scheduleMode?: GoalScheduleMode;  // 'weekly' (Mon-Sun schedule) vs 'custom_queue' (relative gaps)
   exerciseTemplates?: GoalExerciseTemplate[];
   createdAt: string;            // ISO date
