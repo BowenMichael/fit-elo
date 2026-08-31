@@ -63,6 +63,16 @@ const METRICS: { label: string; value: WorkoutMetric }[] = [
   { label: 'Minutes', value: 'minutes' }
 ];
 
+const DAY_FULL_NAMES: Record<DayOfWeek, string> = {
+  Mon: 'Monday',
+  Tue: 'Tuesday',
+  Wed: 'Wednesday',
+  Thu: 'Thursday',
+  Fri: 'Friday',
+  Sat: 'Saturday',
+  Sun: 'Sunday'
+};
+
 export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
   visible,
   onClose,
@@ -81,6 +91,7 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
 
   // Step 2: Scheduling Mode & Exercises Definition
   const [scheduleMode, setScheduleMode] = useState<GoalScheduleMode>('weekly');
+  const [selectedDay, setSelectedDay] = useState<DayOfWeek>('Mon');
   const [exerciseTemplates, setExerciseTemplates] = useState<GoalExerciseTemplate[]>([
     ...DEFAULT_10K_EXERCISES
   ]);
@@ -125,6 +136,7 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
   const handleOpenAddForDay = (day: DayOfWeek) => {
     Haptics.impact('light');
     setNewExDay(day);
+    setSelectedDay(day);
     setNewExTitle('');
     setNewExValStr('2.5');
     setIsAddingExercise(true);
@@ -194,6 +206,10 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
     setCurrentStep(1);
   };
 
+  // Filter tasks for active selected day in weekly schedule mode
+  const selectedDayTasks = exerciseTemplates.filter((ex) => ex.dayOfWeek === selectedDay);
+  const selectedDayVolume = Math.round(selectedDayTasks.reduce((sum, ex) => sum + ex.baseTargetValue, 0) * 10) / 10;
+
   return (
     <Modal
       visible={visible}
@@ -220,7 +236,7 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                 Goal Creation Wizard
               </Text>
               <Text style={[styles.sheetSubtitle, { color: theme.colors.textSecondary }]}>
-                Step {currentStep} of 3 • {currentStep === 1 ? 'Objective & App-Determined MMR' : currentStep === 2 ? 'Weekly Activity Schedule' : 'Overload & Target Matrix'}
+                Step {currentStep} of 3 • {currentStep === 1 ? 'Objective & App-Determined MMR' : currentStep === 2 ? 'Weekly Schedule & Daily Tasks' : 'Overload & Target Matrix'}
               </Text>
             </View>
             <TouchableOpacity
@@ -418,7 +434,7 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                         App-Determined Target Rating
                       </Text>
                       <Text style={[styles.appEloSub, { color: theme.colors.textMuted }]}>
-                        Calculated from pinnacle {targetValue} {targetMetric} + weekly training volume
+                        Calculated from pinnacle {targetValue} {targetMetric} + weekly volume
                       </Text>
                     </View>
                   </View>
@@ -538,84 +554,178 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                {/* MODE A: WEEKLY MONDAY–SUNDAY SCHEDULE VIEW */}
+                {/* MODE A: HORIZONTAL MONDAY-SUNDAY DAY SLIDER WITH DAILY TASKS SECTION */}
                 {scheduleMode === 'weekly' ? (
                   <View style={styles.weeklyScheduleContainer}>
                     <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
-                      Monday through Sunday Schedule
+                      Weekly Schedule ({exerciseTemplates.length} Tasks • {Math.round(baseWeeklyVolume * 10) / 10} {targetMetric}/wk)
                     </Text>
                     <Text style={[styles.sectionSub, { color: theme.colors.textSecondary }]}>
-                      Assign exercise queues to each day of the week. Multiple workouts per day are permitted.
+                      Select a day to view and customize scheduled tasks. Badges display task counts.
                     </Text>
 
-                    {DAYS_OF_WEEK_ORDER.map((day) => {
-                      const dayExercises = exerciseTemplates.filter((ex) => ex.dayOfWeek === day);
+                    {/* Horizontal Monday-to-Sunday Day Slider Bar */}
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.horizontalDaysSlider}
+                    >
+                      {DAYS_OF_WEEK_ORDER.map((day) => {
+                        const isSelected = selectedDay === day;
+                        const taskCount = exerciseTemplates.filter((ex) => ex.dayOfWeek === day).length;
 
-                      return (
-                        <View
-                          key={day}
-                          style={[
-                            styles.dayCard,
-                            {
-                              backgroundColor: theme.colors.surfaceSubtle,
-                              borderColor: dayExercises.length > 0 ? theme.colors.borderLight : theme.colors.border
-                            }
-                          ]}
-                        >
-                          <View style={styles.dayCardHeader}>
-                            <View style={styles.dayBadge}>
-                              <Text style={[styles.dayBadgeText, { color: theme.colors.primary }]}>{day}</Text>
-                            </View>
-
-                            <TouchableOpacity
-                              style={styles.addDayBtn}
-                              onPress={() => handleOpenAddForDay(day)}
+                        return (
+                          <TouchableOpacity
+                            key={day}
+                            activeOpacity={0.8}
+                            style={[
+                              styles.daySliderPill,
+                              {
+                                backgroundColor: isSelected ? theme.colors.primary : theme.colors.surfaceSubtle,
+                                borderColor: isSelected ? theme.colors.primaryLight : theme.colors.border
+                              },
+                              isSelected && theme.shadows.sm
+                            ]}
+                            onPress={() => {
+                              Haptics.selection();
+                              setSelectedDay(day);
+                              setIsAddingExercise(false);
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.daySliderPillText,
+                                { color: isSelected ? '#FFFFFF' : theme.colors.textSecondary }
+                              ]}
                             >
-                              <PlusIcon size={12} color={theme.colors.primary} />
-                              <Text style={[styles.addDayBtnText, { color: theme.colors.primary }]}>
-                                Add to {day}
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
+                              {day}
+                            </Text>
 
-                          {dayExercises.length > 0 ? (
-                            <View style={styles.dayExercisesList}>
-                              {dayExercises.map((ex) => (
+                            {/* Task Count Badge */}
+                            <View
+                              style={[
+                                styles.daySliderBadge,
+                                {
+                                  backgroundColor: isSelected
+                                    ? '#FFFFFF'
+                                    : taskCount > 0
+                                    ? theme.colors.primarySubtle
+                                    : theme.colors.surface,
+                                  borderColor: isSelected
+                                    ? '#FFFFFF'
+                                    : taskCount > 0
+                                    ? theme.colors.primary
+                                    : theme.colors.border
+                                }
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.daySliderBadgeText,
+                                  {
+                                    color: isSelected
+                                      ? theme.colors.primary
+                                      : taskCount > 0
+                                      ? theme.colors.primary
+                                      : theme.colors.textMuted
+                                  }
+                                ]}
+                              >
+                                {taskCount}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+
+                    {/* Dedicated Section Underneath Showing Selected Day Tasks */}
+                    <View
+                      style={[
+                        styles.activeDaySectionCard,
+                        {
+                          backgroundColor: theme.colors.surfaceSubtle,
+                          borderColor: theme.colors.border
+                        }
+                      ]}
+                    >
+                      <View style={styles.activeDayHeader}>
+                        <View>
+                          <Text style={[styles.activeDayTitle, { color: theme.colors.textPrimary }]}>
+                            {DAY_FULL_NAMES[selectedDay]} Tasks ({selectedDayTasks.length})
+                          </Text>
+                          <Text style={[styles.activeDaySub, { color: theme.colors.textMuted }]}>
+                            {selectedDayTasks.length > 0
+                              ? `${selectedDayVolume} ${targetMetric} scheduled`
+                              : 'Rest & recovery day'}
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={[styles.addDayTaskBtn, { backgroundColor: theme.colors.primary }]}
+                          onPress={() => handleOpenAddForDay(selectedDay)}
+                        >
+                          <PlusIcon size={12} color="#FFFFFF" />
+                          <Text style={styles.addDayTaskBtnText}>Add Task</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* List of Tasks for Selected Day */}
+                      {selectedDayTasks.length > 0 ? (
+                        <View style={styles.dayTasksList}>
+                          {selectedDayTasks.map((ex, idx) => (
+                            <View
+                              key={ex.id}
+                              style={[
+                                styles.dayTaskCard,
+                                {
+                                  backgroundColor: theme.colors.surface,
+                                  borderColor: theme.colors.border
+                                }
+                              ]}
+                            >
+                              <View style={styles.dayTaskLeft}>
                                 <View
-                                  key={ex.id}
                                   style={[
-                                    styles.dayExItem,
-                                    {
-                                      backgroundColor: theme.colors.surface,
-                                      borderColor: theme.colors.border
-                                    }
+                                    styles.taskIndexBadge,
+                                    { backgroundColor: theme.colors.primary }
                                   ]}
                                 >
-                                  <View style={{ flex: 1 }}>
-                                    <Text style={[styles.dayExTitle, { color: theme.colors.textPrimary }]}>
-                                      {ex.title}
-                                    </Text>
-                                    <Text style={[styles.dayExSub, { color: theme.colors.accent }]}>
-                                      {ex.baseTargetValue} {ex.metric}
-                                    </Text>
-                                  </View>
-                                  <TouchableOpacity
-                                    style={styles.deleteExBtn}
-                                    onPress={() => handleRemoveExercise(ex.id)}
-                                  >
-                                    <TrashIcon size={14} color={theme.colors.danger} />
-                                  </TouchableOpacity>
+                                  <Text style={styles.taskIndexText}>#{idx + 1}</Text>
                                 </View>
-                              ))}
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[styles.dayTaskTitle, { color: theme.colors.textPrimary }]}>
+                                    {ex.title}
+                                  </Text>
+                                  <Text style={[styles.dayTaskTarget, { color: theme.colors.accent }]}>
+                                    {ex.baseTargetValue} {ex.metric} • {ex.category}
+                                  </Text>
+                                  {ex.notes && (
+                                    <Text style={[styles.dayTaskNotes, { color: theme.colors.textSecondary }]}>
+                                      {ex.notes}
+                                    </Text>
+                                  )}
+                                </View>
+                              </View>
+
+                              <TouchableOpacity
+                                style={styles.deleteExBtn}
+                                onPress={() => handleRemoveExercise(ex.id)}
+                              >
+                                <TrashIcon size={16} color={theme.colors.danger} />
+                              </TouchableOpacity>
                             </View>
-                          ) : (
-                            <Text style={[styles.restDayText, { color: theme.colors.textMuted }]}>
-                              Rest / Recovery Day
-                            </Text>
-                          )}
+                          ))}
                         </View>
-                      );
-                    })}
+                      ) : (
+                        <View style={[styles.emptyDayBox, { borderColor: theme.colors.border }]}>
+                          <ShieldIcon size={18} color={theme.colors.textMuted} />
+                          <Text style={[styles.emptyDayText, { color: theme.colors.textMuted }]}>
+                            No workouts scheduled for {DAY_FULL_NAMES[selectedDay]} (Rest Day)
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 ) : (
                   /* MODE B: CUSTOM QUEUE VIEW */
@@ -700,7 +810,7 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                     ]}
                   >
                     <Text style={[styles.formSubTitle, { color: theme.colors.textPrimary }]}>
-                      Add Session {scheduleMode === 'weekly' ? `to ${newExDay}` : ''}
+                      Add Task to {scheduleMode === 'weekly' ? DAY_FULL_NAMES[newExDay] : 'Custom Queue'}
                     </Text>
 
                     <TextInput
@@ -776,7 +886,7 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                         style={[styles.confirmAddExBtn, { backgroundColor: theme.colors.primary }]}
                         onPress={handleAddExercise}
                       >
-                        <Text style={styles.confirmAddExText}>Save Session</Text>
+                        <Text style={styles.confirmAddExText}>Save Task</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1204,63 +1314,129 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   weeklyScheduleContainer: {
-    gap: 8,
+    gap: 10,
     marginBottom: 12
   },
-  dayCard: {
-    borderRadius: 10,
-    borderWidth: 1,
-    padding: 10
+  horizontalDaysSlider: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    marginBottom: 4
   },
-  dayCardHeader: {
+  daySliderPill: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    minWidth: 54,
+    gap: 4
+  },
+  daySliderPillText: {
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  daySliderBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 9999,
+    borderWidth: 1
+  },
+  daySliderBadgeText: {
+    fontSize: 10,
+    fontWeight: '800'
+  },
+  activeDaySectionCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    marginTop: 6
+  },
+  activeDayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6
+    marginBottom: 10
   },
-  dayBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6
-  },
-  dayBadgeText: {
-    fontSize: 11,
+  activeDayTitle: {
+    fontSize: 14,
     fontWeight: '800'
   },
-  addDayBtn: {
+  activeDaySub: {
+    fontSize: 11,
+    marginTop: 1
+  },
+  addDayTaskBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    padding: 4
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8
   },
-  addDayBtnText: {
+  addDayTaskBtnText: {
     fontSize: 11,
-    fontWeight: '700'
+    fontWeight: '700',
+    color: '#FFFFFF'
   },
-  dayExercisesList: {
-    gap: 6
+  dayTasksList: {
+    gap: 8
   },
-  dayExItem: {
+  dayTaskCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 8,
-    borderRadius: 8,
+    padding: 10,
+    borderRadius: 10,
     borderWidth: 1
   },
-  dayExTitle: {
-    fontSize: 12,
-    fontWeight: '600'
+  dayTaskLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1
   },
-  dayExSub: {
+  taskIndexBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  taskIndexText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: '#FFFFFF'
+  },
+  dayTaskTitle: {
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  dayTaskTarget: {
+    fontSize: 11,
+    fontWeight: '600',
     marginTop: 1
   },
-  restDayText: {
+  dayTaskNotes: {
     fontSize: 11,
     fontStyle: 'italic',
-    paddingLeft: 4
+    marginTop: 3
+  },
+  emptyDayBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 18,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed'
+  },
+  emptyDayText: {
+    fontSize: 12,
+    fontStyle: 'italic'
   },
   customQueueContainer: {
     marginBottom: 12
