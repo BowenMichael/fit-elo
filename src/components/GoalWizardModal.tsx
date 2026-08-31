@@ -22,15 +22,19 @@ import {
   ZapIcon
 } from './AppIcons';
 import {
+  calculateGoalTargetElo,
+  DAYS_OF_WEEK_ORDER,
   DEFAULT_10K_EXERCISES,
   DEFAULT_5K_EXERCISES,
   DEFAULT_HABIT_EXERCISES,
   DEFAULT_HALF_MARATHON_EXERCISES
 } from '../domain/goalEngine';
-import { calculateWorkoutDifficulty, getRankTierInfo } from '../domain/eloEngine';
+import { getRankTierInfo } from '../domain/eloEngine';
 import {
+  DayOfWeek,
   FitnessGoal,
   GoalExerciseTemplate,
+  GoalScheduleMode,
   WorkoutCategory,
   WorkoutMetric
 } from '../domain/types';
@@ -73,32 +77,58 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
   const [category, setCategory] = useState<WorkoutCategory>('running');
   const [targetMetric, setTargetMetric] = useState<WorkoutMetric>('miles');
   const [targetValueStr, setTargetValueStr] = useState('6.21');
-  const [targetEloStr, setTargetEloStr] = useState('1470');
   const [totalWeeksStr, setTotalWeeksStr] = useState('4');
 
-  // Step 2: Exercises Definition
+  // Step 2: Scheduling Mode & Exercises Definition
+  const [scheduleMode, setScheduleMode] = useState<GoalScheduleMode>('weekly');
   const [exerciseTemplates, setExerciseTemplates] = useState<GoalExerciseTemplate[]>([
     ...DEFAULT_10K_EXERCISES
   ]);
 
-  // New exercise inline form
+  // Inline exercise builder state
+  const [isAddingExercise, setIsAddingExercise] = useState(false);
+  const [newExDay, setNewExDay] = useState<DayOfWeek>('Mon');
   const [newExTitle, setNewExTitle] = useState('');
   const [newExCategory, setNewExCategory] = useState<WorkoutCategory>('running');
   const [newExValStr, setNewExValStr] = useState('3.0');
   const [newExGapStr, setNewExGapStr] = useState('2');
   const [newExNotes, setNewExNotes] = useState('');
-  const [isAddingExercise, setIsAddingExercise] = useState(false);
 
-  // Step 3: Progressive Overload
+  // Step 3: Progressive Overload & Custom Weekly Targets
   const [overloadRate, setOverloadRate] = useState<number>(0.05); // 5% per week
+  const [isCustomWeeklyTargets, setIsCustomWeeklyTargets] = useState<boolean>(false);
+  const [customWeeklyTargets, setCustomWeeklyTargets] = useState<string[]>(['10.0', '11.5', '13.0', '15.0']);
 
   const totalWeeks = parseInt(totalWeeksStr, 10) || 4;
   const targetValue = parseFloat(targetValueStr) || 6.21;
-  const targetElo = parseInt(targetEloStr, 10) || 1470;
-  const targetRank = getRankTierInfo(targetElo);
 
-  // Computed weekly volume from defined exercises
-  const weeklyVolume = exerciseTemplates.reduce((sum, ex) => sum + ex.baseTargetValue, 0);
+  // Base Weekly Volume from templates
+  const baseWeeklyVolume = exerciseTemplates.reduce((sum, ex) => sum + ex.baseTargetValue, 0);
+
+  // App-Determined Target MMR
+  const appDeterminedElo = calculateGoalTargetElo(
+    targetMetric,
+    targetValue,
+    baseWeeklyVolume
+  );
+  const rankInfo = getRankTierInfo(appDeterminedElo);
+
+  // Initialize / update custom weekly targets when total weeks changes
+  React.useEffect(() => {
+    const updated = Array.from({ length: totalWeeks }, (_, i) => {
+      const mult = 1.0 + i * overloadRate;
+      return (Math.round(baseWeeklyVolume * mult * 10) / 10).toString();
+    });
+    setCustomWeeklyTargets(updated);
+  }, [totalWeeks, overloadRate, baseWeeklyVolume]);
+
+  const handleOpenAddForDay = (day: DayOfWeek) => {
+    Haptics.impact('light');
+    setNewExDay(day);
+    setNewExTitle('');
+    setNewExValStr('2.5');
+    setIsAddingExercise(true);
+  };
 
   const handleAddExercise = () => {
     if (!newExTitle.trim()) return;
@@ -113,6 +143,7 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
       metric: targetMetric,
       baseTargetValue,
       daysFromPrevious,
+      dayOfWeek: scheduleMode === 'weekly' ? newExDay : undefined,
       notes: newExNotes.trim() || undefined
     };
 
@@ -139,17 +170,23 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
     if (!title.trim() || exerciseTemplates.length === 0) return;
 
     Haptics.notification('success');
+    const parsedCustomTargets = isCustomWeeklyTargets
+      ? customWeeklyTargets.map((t) => parseFloat(t) || baseWeeklyVolume)
+      : undefined;
+
     onSaveGoal({
       title: title.trim(),
       description: description.trim() || `${totalWeeks}-week progression toward ${targetValue} ${targetMetric}.`,
       category,
       targetMetric,
       targetValue,
-      targetElo,
+      targetElo: appDeterminedElo,
       totalWeeks,
       weeklySessionsTarget: exerciseTemplates.length,
-      weeklyVolumeTarget: Math.round(weeklyVolume * 10) / 10,
+      weeklyVolumeTarget: Math.round(baseWeeklyVolume * 10) / 10,
       progressiveOverloadRate: overloadRate,
+      customWeeklyTargets: parsedCustomTargets,
+      scheduleMode,
       exerciseTemplates
     });
 
@@ -183,7 +220,7 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                 Goal Creation Wizard
               </Text>
               <Text style={[styles.sheetSubtitle, { color: theme.colors.textSecondary }]}>
-                Step {currentStep} of 3 • {currentStep === 1 ? 'Objective & Target MMR' : currentStep === 2 ? 'Define Weekly Exercises' : 'Overload & Task Preview'}
+                Step {currentStep} of 3 • {currentStep === 1 ? 'Objective & App-Determined MMR' : currentStep === 2 ? 'Weekly Activity Schedule' : 'Overload & Target Matrix'}
               </Text>
             </View>
             <TouchableOpacity
@@ -214,7 +251,7 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
           </View>
 
           <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
-            {/* ================= STEP 1: OBJECTIVE & MMR ================= */}
+            {/* ================= STEP 1: OBJECTIVE & APP-DETERMINED MMR ================= */}
             {currentStep === 1 && (
               <View style={styles.stepContent}>
                 <View style={styles.formGroup}>
@@ -319,11 +356,11 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                   </View>
                 </View>
 
-                {/* Target Value, MMR, Weeks Row */}
+                {/* Target Value & Weeks Row */}
                 <View style={styles.rowInputs}>
-                  <View style={[styles.formGroup, { flex: 1 }]}>
+                  <View style={[styles.formGroup, { flex: 1.5 }]}>
                     <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                      Pinnacle Target ({targetMetric})
+                      Pinnacle Goal Target ({targetMetric})
                     </Text>
                     <TextInput
                       style={[
@@ -344,28 +381,7 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
 
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                      Target MMR ({targetRank.name})
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.textInput,
-                        {
-                          backgroundColor: theme.colors.surfaceSubtle,
-                          borderColor: theme.colors.border,
-                          color: theme.colors.textPrimary
-                        }
-                      ]}
-                      keyboardType="number-pad"
-                      value={targetEloStr}
-                      onChangeText={setTargetEloStr}
-                      placeholder="1470"
-                      placeholderTextColor={theme.colors.textMuted}
-                    />
-                  </View>
-
-                  <View style={[styles.formGroup, { flex: 0.8 }]}>
-                    <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                      Weeks
+                      Total Weeks
                     </Text>
                     <TextInput
                       style={[
@@ -382,6 +398,37 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                       placeholder="4"
                       placeholderTextColor={theme.colors.textMuted}
                     />
+                  </View>
+                </View>
+
+                {/* App-Determined Target MMR Banner */}
+                <View
+                  style={[
+                    styles.appEloCard,
+                    {
+                      backgroundColor: theme.colors.surfaceSubtle,
+                      borderColor: rankInfo.color
+                    }
+                  ]}
+                >
+                  <View style={styles.appEloLeft}>
+                    <ZapIcon size={20} color={rankInfo.color} />
+                    <View>
+                      <Text style={[styles.appEloTitle, { color: theme.colors.textPrimary }]}>
+                        App-Determined Target Rating
+                      </Text>
+                      <Text style={[styles.appEloSub, { color: theme.colors.textMuted }]}>
+                        Calculated from pinnacle {targetValue} {targetMetric} + weekly training volume
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.appEloRight}>
+                    <Text style={[styles.appEloScore, { color: rankInfo.color }]}>
+                      {appDeterminedElo} MMR
+                    </Text>
+                    <Text style={[styles.appEloTier, { color: theme.colors.textSecondary }]}>
+                      {rankInfo.name} {rankInfo.icon}
+                    </Text>
                   </View>
                 </View>
 
@@ -411,22 +458,65 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
               </View>
             )}
 
-            {/* ================= STEP 2: DEFINE WEEKLY EXERCISES ================= */}
+            {/* ================= STEP 2: DUAL MODE WEEKLY ACTIVITIES ================= */}
             {currentStep === 2 && (
               <View style={styles.stepContent}>
-                <View style={styles.exercisePackHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
-                    Weekly Routine ({exerciseTemplates.length} Sessions • {Math.round(weeklyVolume * 10) / 10} {targetMetric}/wk)
-                  </Text>
-                  <Text style={[styles.sectionSub, { color: theme.colors.textSecondary }]}>
-                    Define the specific workouts that repeat and overload weekly.
-                  </Text>
+                {/* Mode Selector */}
+                <View style={styles.modeSwitchContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.modeTabBtn,
+                      {
+                        backgroundColor:
+                          scheduleMode === 'weekly' ? theme.colors.primary : theme.colors.surfaceSubtle,
+                        borderColor:
+                          scheduleMode === 'weekly' ? theme.colors.primaryLight : theme.colors.border
+                      }
+                    ]}
+                    onPress={() => {
+                      Haptics.selection();
+                      setScheduleMode('weekly');
+                    }}
+                  >
+                    <CalendarIcon size={14} color={scheduleMode === 'weekly' ? '#FFFFFF' : theme.colors.textSecondary} />
+                    <Text
+                      style={[
+                        styles.modeTabBtnText,
+                        { color: scheduleMode === 'weekly' ? '#FFFFFF' : theme.colors.textSecondary }
+                      ]}
+                    >
+                      Weekly (Mon–Sun)
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.modeTabBtn,
+                      {
+                        backgroundColor:
+                          scheduleMode === 'custom_queue' ? theme.colors.primary : theme.colors.surfaceSubtle,
+                        borderColor:
+                          scheduleMode === 'custom_queue' ? theme.colors.primaryLight : theme.colors.border
+                      }
+                    ]}
+                    onPress={() => {
+                      Haptics.selection();
+                      setScheduleMode('custom_queue');
+                    }}
+                  >
+                    <RunnerIcon size={14} color={scheduleMode === 'custom_queue' ? '#FFFFFF' : theme.colors.textSecondary} />
+                    <Text
+                      style={[
+                        styles.modeTabBtnText,
+                        { color: scheduleMode === 'custom_queue' ? '#FFFFFF' : theme.colors.textSecondary }
+                      ]}
+                    >
+                      Custom Queue
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
                 {/* Quick Presets */}
-                <Text style={[styles.fieldHint, { color: theme.colors.textMuted }]}>
-                  QUICK EXERCISE PACKS
-                </Text>
                 <View style={styles.packsRow}>
                   <TouchableOpacity
                     style={[styles.packChip, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
@@ -448,95 +538,176 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                {/* Exercises List */}
-                <View style={styles.exerciseList}>
-                  {exerciseTemplates.map((ex, index) => (
-                    <View
-                      key={ex.id}
-                      style={[
-                        styles.exerciseItemCard,
-                        {
-                          backgroundColor: theme.colors.surfaceSubtle,
-                          borderColor: theme.colors.border
-                        }
-                      ]}
-                    >
-                      <View style={styles.exerciseItemHeader}>
-                        <View style={styles.exerciseTitleWrap}>
-                          <View
-                            style={[
-                              styles.sessionNumberBadge,
-                              { backgroundColor: theme.colors.primary }
-                            ]}
-                          >
-                            <Text style={styles.sessionNumberText}>S{index + 1}</Text>
+                {/* MODE A: WEEKLY MONDAY–SUNDAY SCHEDULE VIEW */}
+                {scheduleMode === 'weekly' ? (
+                  <View style={styles.weeklyScheduleContainer}>
+                    <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+                      Monday through Sunday Schedule
+                    </Text>
+                    <Text style={[styles.sectionSub, { color: theme.colors.textSecondary }]}>
+                      Assign exercise queues to each day of the week. Multiple workouts per day are permitted.
+                    </Text>
+
+                    {DAYS_OF_WEEK_ORDER.map((day) => {
+                      const dayExercises = exerciseTemplates.filter((ex) => ex.dayOfWeek === day);
+
+                      return (
+                        <View
+                          key={day}
+                          style={[
+                            styles.dayCard,
+                            {
+                              backgroundColor: theme.colors.surfaceSubtle,
+                              borderColor: dayExercises.length > 0 ? theme.colors.borderLight : theme.colors.border
+                            }
+                          ]}
+                        >
+                          <View style={styles.dayCardHeader}>
+                            <View style={styles.dayBadge}>
+                              <Text style={[styles.dayBadgeText, { color: theme.colors.primary }]}>{day}</Text>
+                            </View>
+
+                            <TouchableOpacity
+                              style={styles.addDayBtn}
+                              onPress={() => handleOpenAddForDay(day)}
+                            >
+                              <PlusIcon size={12} color={theme.colors.primary} />
+                              <Text style={[styles.addDayBtnText, { color: theme.colors.primary }]}>
+                                Add to {day}
+                              </Text>
+                            </TouchableOpacity>
                           </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.exerciseItemTitle, { color: theme.colors.textPrimary }]}>
-                              {ex.title}
+
+                          {dayExercises.length > 0 ? (
+                            <View style={styles.dayExercisesList}>
+                              {dayExercises.map((ex) => (
+                                <View
+                                  key={ex.id}
+                                  style={[
+                                    styles.dayExItem,
+                                    {
+                                      backgroundColor: theme.colors.surface,
+                                      borderColor: theme.colors.border
+                                    }
+                                  ]}
+                                >
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={[styles.dayExTitle, { color: theme.colors.textPrimary }]}>
+                                      {ex.title}
+                                    </Text>
+                                    <Text style={[styles.dayExSub, { color: theme.colors.accent }]}>
+                                      {ex.baseTargetValue} {ex.metric}
+                                    </Text>
+                                  </View>
+                                  <TouchableOpacity
+                                    style={styles.deleteExBtn}
+                                    onPress={() => handleRemoveExercise(ex.id)}
+                                  >
+                                    <TrashIcon size={14} color={theme.colors.danger} />
+                                  </TouchableOpacity>
+                                </View>
+                              ))}
+                            </View>
+                          ) : (
+                            <Text style={[styles.restDayText, { color: theme.colors.textMuted }]}>
+                              Rest / Recovery Day
                             </Text>
-                            <Text style={[styles.exerciseItemSub, { color: theme.colors.textMuted }]}>
-                              Target: {ex.baseTargetValue} {ex.metric} • {ex.daysFromPrevious === 0 ? 'Same Day' : `+${ex.daysFromPrevious}d gap`}
-                            </Text>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  /* MODE B: CUSTOM QUEUE VIEW */
+                  <View style={styles.customQueueContainer}>
+                    <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+                      Sequential Custom Queue ({exerciseTemplates.length} Sessions)
+                    </Text>
+
+                    <View style={styles.exerciseList}>
+                      {exerciseTemplates.map((ex, index) => (
+                        <View
+                          key={ex.id}
+                          style={[
+                            styles.exerciseItemCard,
+                            {
+                              backgroundColor: theme.colors.surfaceSubtle,
+                              borderColor: theme.colors.border
+                            }
+                          ]}
+                        >
+                          <View style={styles.exerciseItemHeader}>
+                            <View style={styles.exerciseTitleWrap}>
+                              <View
+                                style={[
+                                  styles.sessionNumberBadge,
+                                  { backgroundColor: theme.colors.primary }
+                                ]}
+                              >
+                                <Text style={styles.sessionNumberText}>S{index + 1}</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.exerciseItemTitle, { color: theme.colors.textPrimary }]}>
+                                  {ex.title}
+                                </Text>
+                                <Text style={[styles.exerciseItemSub, { color: theme.colors.textMuted }]}>
+                                  {ex.baseTargetValue} {ex.metric} • +{ex.daysFromPrevious}d gap
+                                </Text>
+                              </View>
+                            </View>
+
+                            <TouchableOpacity
+                              style={styles.deleteExBtn}
+                              onPress={() => handleRemoveExercise(ex.id)}
+                            >
+                              <TrashIcon size={16} color={theme.colors.danger} />
+                            </TouchableOpacity>
                           </View>
                         </View>
-
-                        <TouchableOpacity
-                          style={styles.deleteExBtn}
-                          onPress={() => handleRemoveExercise(ex.id)}
-                        >
-                          <TrashIcon size={16} color={theme.colors.danger} />
-                        </TouchableOpacity>
-                      </View>
-
-                      {ex.notes && (
-                        <Text style={[styles.exerciseNotes, { color: theme.colors.textSecondary }]}>
-                          {ex.notes}
-                        </Text>
-                      )}
+                      ))}
                     </View>
-                  ))}
-                </View>
 
-                {/* Add Custom Exercise Form */}
-                {!isAddingExercise ? (
-                  <TouchableOpacity
-                    style={[
-                      styles.addExBtn,
-                      {
-                        backgroundColor: theme.colors.surfaceSubtle,
-                        borderColor: theme.colors.primary
-                      }
-                    ]}
-                    onPress={() => {
-                      Haptics.impact('light');
-                      setIsAddingExercise(true);
-                    }}
-                  >
-                    <PlusIcon size={16} color={theme.colors.primary} />
-                    <Text style={[styles.addExBtnText, { color: theme.colors.primary }]}>
-                      Add Custom Exercise to Weekly Cycle
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.addExBtn,
+                        {
+                          backgroundColor: theme.colors.surfaceSubtle,
+                          borderColor: theme.colors.primary
+                        }
+                      ]}
+                      onPress={() => {
+                        Haptics.impact('light');
+                        setIsAddingExercise(true);
+                      }}
+                    >
+                      <PlusIcon size={16} color={theme.colors.primary} />
+                      <Text style={[styles.addExBtnText, { color: theme.colors.primary }]}>
+                        Add Custom Queue Session
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Inline Add Exercise Form (Shared) */}
+                {isAddingExercise && (
                   <View
                     style={[
                       styles.newExFormCard,
                       {
-                        backgroundColor: theme.colors.surfaceSubtle,
+                        backgroundColor: theme.colors.surface,
                         borderColor: theme.colors.primary
                       }
                     ]}
                   >
                     <Text style={[styles.formSubTitle, { color: theme.colors.textPrimary }]}>
-                      New Weekly Workout Exercise
+                      Add Session {scheduleMode === 'weekly' ? `to ${newExDay}` : ''}
                     </Text>
 
                     <TextInput
                       style={[
                         styles.textInput,
                         {
-                          backgroundColor: theme.colors.surface,
+                          backgroundColor: theme.colors.surfaceSubtle,
                           borderColor: theme.colors.border,
                           color: theme.colors.textPrimary,
                           marginBottom: 10
@@ -551,13 +722,13 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                     <View style={styles.rowInputs}>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                          Starting Target ({targetMetric})
+                          Target ({targetMetric})
                         </Text>
                         <TextInput
                           style={[
                             styles.textInput,
                             {
-                              backgroundColor: theme.colors.surface,
+                              backgroundColor: theme.colors.surfaceSubtle,
                               borderColor: theme.colors.border,
                               color: theme.colors.textPrimary
                             }
@@ -570,44 +741,29 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                         />
                       </View>
 
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                          Day Gap (Days After Prior)
-                        </Text>
-                        <TextInput
-                          style={[
-                            styles.textInput,
-                            {
-                              backgroundColor: theme.colors.surface,
-                              borderColor: theme.colors.border,
-                              color: theme.colors.textPrimary
-                            }
-                          ]}
-                          keyboardType="number-pad"
-                          value={newExGapStr}
-                          onChangeText={setNewExGapStr}
-                          placeholder="2"
-                          placeholderTextColor={theme.colors.textMuted}
-                        />
-                      </View>
+                      {scheduleMode === 'custom_queue' && (
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                            Gap Days
+                          </Text>
+                          <TextInput
+                            style={[
+                              styles.textInput,
+                              {
+                                backgroundColor: theme.colors.surfaceSubtle,
+                                borderColor: theme.colors.border,
+                                color: theme.colors.textPrimary
+                              }
+                            ]}
+                            keyboardType="number-pad"
+                            value={newExGapStr}
+                            onChangeText={setNewExGapStr}
+                            placeholder="2"
+                            placeholderTextColor={theme.colors.textMuted}
+                          />
+                        </View>
+                      )}
                     </View>
-
-                    <TextInput
-                      style={[
-                        styles.textInput,
-                        {
-                          backgroundColor: theme.colors.surface,
-                          borderColor: theme.colors.border,
-                          color: theme.colors.textPrimary,
-                          marginTop: 10,
-                          marginBottom: 10
-                        }
-                      ]}
-                      value={newExNotes}
-                      onChangeText={setNewExNotes}
-                      placeholder="Focus instructions, tempo pacing, recovery cues..."
-                      placeholderTextColor={theme.colors.textMuted}
-                    />
 
                     <View style={styles.builderActionsRow}>
                       <TouchableOpacity
@@ -620,7 +776,7 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                         style={[styles.confirmAddExBtn, { backgroundColor: theme.colors.primary }]}
                         onPress={handleAddExercise}
                       >
-                        <Text style={styles.confirmAddExText}>Add Session</Text>
+                        <Text style={styles.confirmAddExText}>Save Session</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -628,65 +784,152 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
               </View>
             )}
 
-            {/* ================= STEP 3: OVERLOAD & PREVIEW ================= */}
+            {/* ================= STEP 3: CUSTOM PROGRESSIVE OVERLOAD & PREVIEW ================= */}
             {currentStep === 3 && (
               <View style={styles.stepContent}>
                 <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
-                  Weekly Progressive Overload
+                  Progressive Overload Configuration
                 </Text>
                 <Text style={[styles.sectionSub, { color: theme.colors.textSecondary }]}>
-                  Choose how your exercises scale in volume each subsequent week.
+                  Choose standard overload rates or define custom progressive targets per week.
                 </Text>
 
-                {/* Overload Rate Selector */}
-                <View style={styles.overloadPillsRow}>
-                  {[
-                    { label: 'Flat (0%)', val: 0 },
-                    { label: '+5% / Week (Recommended)', val: 0.05 },
-                    { label: '+8% / Week (Aggressive)', val: 0.08 },
-                    { label: '+10% / Week (Peak Overload)', val: 0.10 }
-                  ].map((rate) => {
-                    const isSelected = overloadRate === rate.val;
-                    return (
-                      <TouchableOpacity
-                        key={rate.val}
-                        style={[
-                          styles.overloadPill,
-                          {
-                            backgroundColor: isSelected ? theme.colors.primary : theme.colors.surfaceSubtle,
-                            borderColor: isSelected ? theme.colors.primaryLight : theme.colors.border
-                          }
-                        ]}
-                        onPress={() => {
-                          Haptics.selection();
-                          setOverloadRate(rate.val);
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.overloadPillText,
-                            { color: isSelected ? '#FFFFFF' : theme.colors.textSecondary }
-                          ]}
-                        >
-                          {rate.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                {/* Overload Mode Selector */}
+                <View style={styles.modeSwitchContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.modeTabBtn,
+                      {
+                        backgroundColor:
+                          !isCustomWeeklyTargets ? theme.colors.primary : theme.colors.surfaceSubtle,
+                        borderColor:
+                          !isCustomWeeklyTargets ? theme.colors.primaryLight : theme.colors.border
+                      }
+                    ]}
+                    onPress={() => setIsCustomWeeklyTargets(false)}
+                  >
+                    <Text
+                      style={[
+                        styles.modeTabBtnText,
+                        { color: !isCustomWeeklyTargets ? '#FFFFFF' : theme.colors.textSecondary }
+                      ]}
+                    >
+                      Preset % Ramp
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.modeTabBtn,
+                      {
+                        backgroundColor:
+                          isCustomWeeklyTargets ? theme.colors.primary : theme.colors.surfaceSubtle,
+                        borderColor:
+                          isCustomWeeklyTargets ? theme.colors.primaryLight : theme.colors.border
+                      }
+                    ]}
+                    onPress={() => setIsCustomWeeklyTargets(true)}
+                  >
+                    <Text
+                      style={[
+                        styles.modeTabBtnText,
+                        { color: isCustomWeeklyTargets ? '#FFFFFF' : theme.colors.textSecondary }
+                      ]}
+                    >
+                      Custom Per-Week Targets
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
-                {/* Multi-Week Task Progression Preview */}
-                <Text style={[styles.fieldHint, { color: theme.colors.textMuted, marginTop: 14 }]}>
-                  MULTI-WEEK TASK QUEUE PREVIEW ({totalWeeks} WEEKS • {totalWeeks * exerciseTemplates.length} TOTAL SESSIONS)
+                {!isCustomWeeklyTargets ? (
+                  /* Standard % Overload Options */
+                  <View style={styles.overloadPillsRow}>
+                    {[
+                      { label: 'Flat (0% Steady)', val: 0 },
+                      { label: '+5% / Week (Recommended Aerobic)', val: 0.05 },
+                      { label: '+8% / Week (Aggressive Ramp)', val: 0.08 },
+                      { label: '+10% / Week (Peak Overload)', val: 0.10 }
+                    ].map((rate) => {
+                      const isSelected = overloadRate === rate.val;
+                      return (
+                        <TouchableOpacity
+                          key={rate.val}
+                          style={[
+                            styles.overloadPill,
+                            {
+                              backgroundColor: isSelected ? theme.colors.primary : theme.colors.surfaceSubtle,
+                              borderColor: isSelected ? theme.colors.primaryLight : theme.colors.border
+                            }
+                          ]}
+                          onPress={() => {
+                            Haptics.selection();
+                            setOverloadRate(rate.val);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.overloadPillText,
+                              { color: isSelected ? '#FFFFFF' : theme.colors.textSecondary }
+                            ]}
+                          >
+                            {rate.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  /* Custom Per-Week Target Editor */
+                  <View style={styles.customWeekTargetsGrid}>
+                    <Text style={[styles.fieldHint, { color: theme.colors.textMuted }]}>
+                      ENTER TARGET VOLUME FOR EACH WEEK ({targetMetric})
+                    </Text>
+                    <View style={styles.customWeekInputsRow}>
+                      {Array.from({ length: totalWeeks }, (_, idx) => idx + 1).map((weekNum) => (
+                        <View key={weekNum} style={styles.customWeekCol}>
+                          <Text style={[styles.customWeekColLabel, { color: theme.colors.textSecondary }]}>
+                            W{weekNum}
+                          </Text>
+                          <TextInput
+                            style={[
+                              styles.textInput,
+                              {
+                                backgroundColor: theme.colors.surfaceSubtle,
+                                borderColor: theme.colors.border,
+                                color: theme.colors.textPrimary,
+                                textAlign: 'center'
+                              }
+                            ]}
+                            keyboardType="decimal-pad"
+                            value={customWeeklyTargets[weekNum - 1] || ''}
+                            onChangeText={(val) => {
+                              const updated = [...customWeeklyTargets];
+                              updated[weekNum - 1] = val;
+                              setCustomWeeklyTargets(updated);
+                            }}
+                            placeholder="12.0"
+                            placeholderTextColor={theme.colors.textMuted}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* Multi-Week Task Progression Matrix Preview */}
+                <Text style={[styles.fieldHint, { color: theme.colors.textMuted, marginTop: 16 }]}>
+                  MULTI-WEEK TARGET MATRIX ({totalWeeks} WEEKS • {totalWeeks * exerciseTemplates.length} TOTAL SESSIONS)
                 </Text>
 
                 <View style={styles.previewWeeksContainer}>
                   {Array.from({ length: totalWeeks }, (_, idx) => idx + 1).map((weekNum) => {
-                    const weekMultiplier = 1.0 + (weekNum - 1) * overloadRate;
-                    const weekVolumeTotal = exerciseTemplates.reduce(
-                      (sum, ex) => sum + Math.round(ex.baseTargetValue * weekMultiplier * 10) / 10,
-                      0
-                    );
+                    let weekVolumeTotal = 0;
+                    if (isCustomWeeklyTargets && customWeeklyTargets[weekNum - 1]) {
+                      weekVolumeTotal = parseFloat(customWeeklyTargets[weekNum - 1]) || 0;
+                    } else {
+                      const mult = 1.0 + (weekNum - 1) * overloadRate;
+                      weekVolumeTotal = Math.round(baseWeeklyVolume * mult * 10) / 10;
+                    }
 
                     return (
                       <View
@@ -704,18 +947,22 @@ export const GoalWizardModal: React.FC<GoalWizardModalProps> = ({
                             WEEK {weekNum}
                           </Text>
                           <Text style={[styles.weekPreviewVol, { color: theme.colors.accent }]}>
-                            ~{Math.round(weekVolumeTotal * 10) / 10} {targetMetric} total
+                            {weekVolumeTotal} {targetMetric} goal
                           </Text>
                         </View>
 
                         {exerciseTemplates.map((ex, sIdx) => {
                           const isPinnacle = weekNum === totalWeeks && sIdx === exerciseTemplates.length - 1;
-                          const scaledVal = isPinnacle ? targetValue : Math.round(ex.baseTargetValue * weekMultiplier * 10) / 10;
+                          const mult = isCustomWeeklyTargets && baseWeeklyVolume > 0
+                            ? (parseFloat(customWeeklyTargets[weekNum - 1]) || baseWeeklyVolume) / baseWeeklyVolume
+                            : 1.0 + (weekNum - 1) * overloadRate;
+                          const scaledVal = isPinnacle ? targetValue : Math.round(ex.baseTargetValue * mult * 10) / 10;
+                          const dayTag = ex.dayOfWeek ? `[${ex.dayOfWeek}] ` : '';
 
                           return (
                             <View key={ex.id} style={styles.weekSessionRow}>
                               <Text style={[styles.weekSessionTitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                                S{sIdx + 1}: {ex.title}
+                                {dayTag}{ex.title}
                               </Text>
                               <Text style={[styles.weekSessionTarget, { color: isPinnacle ? theme.colors.flame : theme.colors.textPrimary }]}>
                                 {scaledVal} {ex.metric} {isPinnacle && '🏆'}
@@ -834,7 +1081,7 @@ const styles = StyleSheet.create({
     borderRadius: 2
   },
   scrollArea: {
-    maxHeight: 520
+    maxHeight: 540
   },
   stepContent: {
     paddingBottom: 10
@@ -877,29 +1124,74 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10
   },
-  exercisePackHeader: {
-    marginBottom: 6
+  appEloCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    padding: 12,
+    marginBottom: 14
   },
-  sectionTitle: {
+  appEloLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    paddingRight: 8
+  },
+  appEloTitle: {
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  appEloSub: {
+    fontSize: 10,
+    marginTop: 2
+  },
+  appEloRight: {
+    alignItems: 'flex-end'
+  },
+  appEloScore: {
     fontSize: 16,
     fontWeight: '800'
   },
-  sectionSub: {
+  appEloTier: {
+    fontSize: 10,
+    fontWeight: '700'
+  },
+  modeSwitchContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12
+  },
+  modeTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 9
+  },
+  modeTabBtnText: {
     fontSize: 12,
+    fontWeight: '700'
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  sectionSub: {
+    fontSize: 11,
     marginTop: 2,
     marginBottom: 10
-  },
-  fieldHint: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: 6
   },
   packsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 14
+    marginBottom: 12
   },
   packChip: {
     paddingHorizontal: 10,
@@ -910,6 +1202,68 @@ const styles = StyleSheet.create({
   packChipText: {
     fontSize: 11,
     fontWeight: '600'
+  },
+  weeklyScheduleContainer: {
+    gap: 8,
+    marginBottom: 12
+  },
+  dayCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 10
+  },
+  dayCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6
+  },
+  dayBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6
+  },
+  dayBadgeText: {
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  addDayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    padding: 4
+  },
+  addDayBtnText: {
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  dayExercisesList: {
+    gap: 6
+  },
+  dayExItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1
+  },
+  dayExTitle: {
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  dayExSub: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 1
+  },
+  restDayText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    paddingLeft: 4
+  },
+  customQueueContainer: {
+    marginBottom: 12
   },
   exerciseList: {
     gap: 8,
@@ -951,11 +1305,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 1
   },
-  exerciseNotes: {
-    fontSize: 11,
-    marginTop: 6,
-    fontStyle: 'italic'
-  },
   deleteExBtn: {
     padding: 4
   },
@@ -976,6 +1325,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1.5,
     padding: 12,
+    marginTop: 8,
     marginBottom: 12
   },
   formSubTitle: {
@@ -1025,6 +1375,28 @@ const styles = StyleSheet.create({
   overloadPillText: {
     fontSize: 12,
     fontWeight: '700'
+  },
+  customWeekTargetsGrid: {
+    marginBottom: 12
+  },
+  fieldHint: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 6
+  },
+  customWeekInputsRow: {
+    flexDirection: 'row',
+    gap: 8
+  },
+  customWeekCol: {
+    flex: 1,
+    alignItems: 'center'
+  },
+  customWeekColLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 4
   },
   previewWeeksContainer: {
     gap: 8

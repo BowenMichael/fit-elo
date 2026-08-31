@@ -82,7 +82,7 @@ export const GoalsScreen: React.FC = () => {
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Athletic Goals</Text>
           <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Define Goals, Customize Weekly Exercise Routines & Scale Overload
+            Define Goals, Mon–Sun Schedules & Custom Overload Trajectories
           </Text>
         </View>
 
@@ -104,9 +104,24 @@ export const GoalsScreen: React.FC = () => {
                   {getCategoryIcon(activeGoal.category)}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.activeGoalBadge, { color: theme.colors.primary }]}>
-                    ACTIVE MACRO GOAL
-                  </Text>
+                  <View style={styles.goalBadgeRow}>
+                    <Text style={[styles.activeGoalBadge, { color: theme.colors.primary }]}>
+                      ACTIVE MACRO GOAL
+                    </Text>
+                    <View
+                      style={[
+                        styles.modeBadge,
+                        {
+                          backgroundColor: theme.colors.surfaceSubtle,
+                          borderColor: theme.colors.border
+                        }
+                      ]}
+                    >
+                      <Text style={[styles.modeBadgeText, { color: theme.colors.textSecondary }]}>
+                        {activeGoal.scheduleMode === 'weekly' ? '📅 Mon–Sun Schedule' : '⛓️ Custom Queue'}
+                      </Text>
+                    </View>
+                  </View>
                   <Text style={[styles.activeGoalTitle, { color: theme.colors.textPrimary }]}>
                     {activeGoal.title}
                   </Text>
@@ -118,7 +133,7 @@ export const GoalsScreen: React.FC = () => {
               {activeGoal.description}
             </Text>
 
-            {/* Target MMR Progression Track */}
+            {/* Target MMR Progression Track (App-Determined) */}
             <View
               style={[
                 styles.mmrTrackContainer,
@@ -130,13 +145,13 @@ export const GoalsScreen: React.FC = () => {
             >
               <View style={styles.mmrTrackHeader}>
                 <View style={styles.mmrPoint}>
-                  <Text style={[styles.mmrLabel, { color: theme.colors.textMuted }]}>CURRENT MMR</Text>
+                  <Text style={[styles.mmrLabel, { color: theme.colors.textMuted }]}>CURRENT RATING</Text>
                   <Text style={[styles.mmrVal, { color: currentRank.color }]}>
                     {profile.eloRating} ({currentRank.name})
                   </Text>
                 </View>
                 <View style={[styles.mmrPoint, { alignItems: 'flex-end' }]}>
-                  <Text style={[styles.mmrLabel, { color: theme.colors.textMuted }]}>GOAL MMR</Text>
+                  <Text style={[styles.mmrLabel, { color: theme.colors.textMuted }]}>APP-CALCULATED GOAL MMR</Text>
                   <Text style={[styles.mmrVal, { color: targetRank.color }]}>
                     {activeGoal.targetElo} ({targetRank.name})
                   </Text>
@@ -231,12 +246,12 @@ export const GoalsScreen: React.FC = () => {
               {activeGoal.exerciseTemplates && activeGoal.exerciseTemplates.length > 0 && (
                 <View style={styles.activeExercisesWrap}>
                   <Text style={[styles.activeExercisesTitle, { color: theme.colors.textMuted }]}>
-                    DEFINED WEEKLY EXERCISES ({activeGoal.exerciseTemplates.length} SESSIONS)
+                    WEEKLY ROUTINE BLUEPRINT ({activeGoal.exerciseTemplates.length} SESSIONS)
                   </Text>
                   {activeGoal.exerciseTemplates.map((ex, i) => (
                     <View key={ex.id || i} style={styles.activeExRow}>
                       <Text style={[styles.activeExTitle, { color: theme.colors.textPrimary }]}>
-                        S{i + 1}: {ex.title}
+                        {ex.dayOfWeek ? `[${ex.dayOfWeek}] ` : `S${i + 1}: `}{ex.title}
                       </Text>
                       <Text style={[styles.activeExVal, { color: theme.colors.accent }]}>
                         {ex.baseTargetValue} {ex.metric}
@@ -274,7 +289,7 @@ export const GoalsScreen: React.FC = () => {
                 Goal Creation Wizard
               </Text>
               <Text style={[styles.wizardLauncherSub, { color: theme.colors.textSecondary }]}>
-                3-Step Builder: Objective $\rightarrow$ Define Exercises $\rightarrow$ Progressive Overload
+                Objective $\rightarrow$ Mon–Sun Weekly Schedule $\rightarrow$ Custom Overload
               </Text>
             </View>
           </View>
@@ -321,7 +336,7 @@ export const GoalsScreen: React.FC = () => {
                         {blueprint.title}
                       </Text>
                       <Text style={[styles.blueprintSub, { color: rank.color }]}>
-                        Target {blueprint.targetElo} MMR • {blueprint.totalWeeks} Weeks
+                        Calculated {blueprint.targetElo} MMR • {blueprint.totalWeeks} Weeks
                       </Text>
                     </View>
                   </View>
@@ -412,10 +427,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  goalBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2
+  },
   activeGoalBadge: {
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.6
+  },
+  modeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1
+  },
+  modeBadgeText: {
+    fontSize: 9,
+    fontWeight: '700'
   },
   activeGoalTitle: {
     fontSize: 20,

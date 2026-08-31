@@ -4,6 +4,10 @@ export type WorkoutStatus = 'PENDING' | 'IN_GRACE' | 'COMPLETED' | 'DOWNGRADED';
 
 export type WorkoutCategory = 'running' | 'strength' | 'hiit' | 'general' | 'recovery' | 'race';
 
+export type GoalScheduleMode = 'weekly' | 'custom_queue';
+
+export type DayOfWeek = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
+
 export interface GoalExerciseTemplate {
   id: string;
   title: string;
@@ -11,6 +15,7 @@ export interface GoalExerciseTemplate {
   metric: WorkoutMetric;
   baseTargetValue: number;
   daysFromPrevious: number; // 0 for same-day workout, 1-3 for days after prior
+  dayOfWeek?: DayOfWeek;    // Specific day of the week for weekly mode (Mon..Sun)
   notes?: string;
 }
 
@@ -21,11 +26,13 @@ export interface FitnessGoal {
   category: WorkoutCategory;
   targetMetric: WorkoutMetric;
   targetValue: number;          // Pinnacle target e.g. 6.21 miles (10K) or 13.1 miles (Half Marathon)
-  targetElo: number;            // Target MMR e.g. 1470 for 10K, 1650 for Half Marathon
+  targetElo: number;            // App-determined Target MMR (e.g. 1471 for 10K)
   totalWeeks: number;           // Total duration in weeks (e.g. 4, 8, 12)
   weeklySessionsTarget: number; // e.g. 4 sessions/week
   weeklyVolumeTarget: number;   // e.g. 12.0 miles/week
   progressiveOverloadRate?: number; // e.g. 0.05 (+5% per week)
+  customWeeklyTargets?: number[];   // Optional custom volume targets per week [10.0, 11.5, 13.0, 15.0]
+  scheduleMode?: GoalScheduleMode;  // 'weekly' (Mon-Sun schedule) vs 'custom_queue' (relative gaps)
   exerciseTemplates?: GoalExerciseTemplate[];
   createdAt: string;            // ISO date
   targetDate?: string;          // Target completion date (e.g. "2026-10-01")
@@ -49,6 +56,7 @@ export interface WorkoutItem {
   targetValue: number;
   daysOffset: number;          // 0 = Today (Due now), 2 = In 2 days, etc. (Can have multiple workouts on same day!)
   daysFromPrevious: number;    // Relative gap in days from the previous workout session (e.g. 2, or 0 for same-day)
+  dayOfWeek?: DayOfWeek;       // Day of the week in weekly schedule (Mon..Sun)
   targetDate?: string;         // Formatted scheduled target date string (e.g. "2026-09-02")
   difficultyElo: number;
   status: WorkoutStatus;
