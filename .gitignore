@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing & Coverage
+coverage/
+*.log
+*.tmp
+jest_check.log
+jest_out.txt
+
+# Production Builds
+dist/
+build/
+web-build/
+.expo/
+.expo-shared/
+
+# Environment Files
+.env
+.env.local
+.env.production
+
+# Native artifacts
+ios/
+android/
+*.orig.*
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary & OS files
+.DS_Store
+Thumbs.db

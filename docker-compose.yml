@@ -1,0 +1,86 @@
+services:
+  # ─── Cache / State Service ───────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: app-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 2s
+    restart: unless-stopped
+
+  # ─── Backend Signaling Server ────────────────────────────────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: app-server
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${PORT:-3001}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8081,http://localhost:3000}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    depends_on:
+      redis:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync
+          path: ./server
+          target: /app/server
+          ignore:
+            - node_modules/
+        - action: rebuild
+          path: ./server/package.json
+    restart: unless-stopped
+
+  # ─── Expo Web / Frontend Application ─────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app-web
+    ports:
+      - "8081:8081"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      EXPO_DEVTOOLS_LISTEN_ADDRESS: 0.0.0.0
+      REACT_NATIVE_PACKAGER_HOSTNAME: ${REACT_NATIVE_PACKAGER_HOSTNAME:-localhost}
+      EXPO_PUBLIC_SERVER_URL: ${EXPO_PUBLIC_SERVER_URL:-http://localhost:3001}
+      EXPO_TOKEN: ${EXPO_TOKEN:-}
+    depends_on:
+      server:
+        condition: service_started
+    tty: true
+    stdin_open: true
+    volumes:
+      - expo-cache:/app/.expo
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: sync
+          path: ./App.tsx
+          target: /app/App.tsx
+        - action: sync
+          path: ./index.ts
+          target: /app/index.ts
+        - action: sync
+          path: ./app.json
+          target: /app/app.json
+        - action: rebuild
+          path: ./package.json
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  expo-cache:
