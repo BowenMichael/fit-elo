@@ -227,12 +227,23 @@ export const useWorkoutStore = create<WorkoutStoreState>((set, get) => ({
 
   advanceDaySimulation: () => {
     const { queue, profile, history, activeGoal, savedGoals } = get();
+    const oldTierInfo = getRankTierInfo(profile.eloRating);
     const result = processDayAdvancement(queue, profile);
+
+    // Detect ELO change from grace penalty (downgraded path sets newElo in updatedProfile)
+    const newElo = result.updatedProfile.eloRating;
+    const newTierInfo = getRankTierInfo(newElo);
+    const eloDelta = newElo - profile.eloRating;
+
+    const dayRankChangeEvent = eloDelta !== 0
+      ? { from: oldTierInfo, to: newTierInfo, eloDelta }
+      : null;
 
     set({
       queue: result.updatedQueue,
       profile: result.updatedProfile,
-      activeNotification: result.alert || get().activeNotification
+      activeNotification: result.alert || get().activeNotification,
+      ...(dayRankChangeEvent ? { rankChangeEvent: dayRankChangeEvent } : {})
     });
 
     persistState(result.updatedProfile, activeGoal, savedGoals, result.updatedQueue, history);

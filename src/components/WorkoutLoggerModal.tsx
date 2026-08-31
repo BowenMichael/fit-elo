@@ -67,8 +67,11 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
 
   const handleComplete = () => {
     Haptics.notification('success');
-    completeWorkout(workout.id, actualValue, duration, rpe, notes.trim() || undefined);
+    // Close the logger first so it slides out before the ELO modal appears
     onClose();
+    setTimeout(() => {
+      completeWorkout(workout.id, actualValue, duration, rpe, notes.trim() || undefined);
+    }, 320);
   };
 
   const getRpeDescription = (val: number) => {
