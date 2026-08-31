@@ -18,6 +18,7 @@ import {
 } from '../components/AppIcons';
 import { WorkoutCard } from '../components/WorkoutCard';
 import { WorkoutLoggerModal } from '../components/WorkoutLoggerModal';
+import { RankChangeModal } from '../components/RankChangeModal';
 import { getRankTierInfo } from '../domain/eloEngine';
 import { WorkoutItem } from '../domain/types';
 import { useAppTheme } from '../store/useThemeStore';
@@ -35,6 +36,8 @@ export const DashboardScreen: React.FC = () => {
 
   const activeGoal = useWorkoutStore((state) => state.activeGoal);
   const getWeeklyGoalProgress = useWorkoutStore((state) => state.getWeeklyGoalProgress);
+  const rankChangeEvent = useWorkoutStore((state) => state.rankChangeEvent);
+  const clearRankChangeEvent = useWorkoutStore((state) => state.clearRankChangeEvent);
 
   const [selectedWorkoutForLog, setSelectedWorkoutForLog] = useState<WorkoutItem | null>(null);
 
@@ -420,6 +423,15 @@ export const DashboardScreen: React.FC = () => {
         workout={selectedWorkoutForLog}
         visible={!!selectedWorkoutForLog}
         onClose={() => setSelectedWorkoutForLog(null)}
+      />
+
+      {/* Rank Change Cinematic Modal */}
+      <RankChangeModal
+        visible={!!rankChangeEvent}
+        fromRank={rankChangeEvent?.from || null}
+        toRank={rankChangeEvent?.to || null}
+        eloDelta={rankChangeEvent?.eloDelta || 0}
+        onDismiss={clearRankChangeEvent}
       />
     </View>
   );

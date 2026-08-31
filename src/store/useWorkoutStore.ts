@@ -23,6 +23,7 @@ import {
   CompletedWorkoutRecord,
   FitnessGoal,
   NotificationAlert,
+  RankTierInfo,
   UserFitnessProfile,
   WeeklyGoalProgress,
   WorkoutItem
@@ -51,6 +52,7 @@ interface WorkoutStoreState {
   queue: WorkoutItem[];
   history: CompletedWorkoutRecord[];
   activeNotification: NotificationAlert | null;
+  rankChangeEvent: { from: RankTierInfo; to: RankTierInfo; eloDelta: number } | null;
   isHydrated: boolean;
 
   // Actions
@@ -84,6 +86,7 @@ interface WorkoutStoreState {
   updateProfile: (updates: Partial<UserFitnessProfile>) => void;
   dismissNotification: () => void;
   showNotification: (alert: NotificationAlert) => void;
+  clearRankChangeEvent: () => void;
   resetAllData: () => void;
 }
 
@@ -110,6 +113,7 @@ export const useWorkoutStore = create<WorkoutStoreState>((set, get) => ({
   queue: generate10KPlan('miles'),
   history: [],
   activeNotification: null,
+  rankChangeEvent: null,
   isHydrated: false,
 
   hydrate: async () => {
@@ -186,9 +190,11 @@ export const useWorkoutStore = create<WorkoutStoreState>((set, get) => ({
 
     const newTierInfo = getRankTierInfo(newElo);
     let notification: NotificationAlert | null = null;
+    let rankChangeEvent: { from: RankTierInfo; to: RankTierInfo; eloDelta: number } | null = null;
 
     if (newTierInfo.tier !== oldTierInfo.tier) {
       notification = createRankUpAlert(oldTierInfo.name, newTierInfo.name);
+      rankChangeEvent = { from: oldTierInfo, to: newTierInfo, eloDelta: delta };
     } else if ([3, 5, 7, 10, 14, 21, 30].includes(newStreak)) {
       notification = createStreakMilestoneAlert(newStreak);
     }
@@ -211,7 +217,8 @@ export const useWorkoutStore = create<WorkoutStoreState>((set, get) => ({
       queue: updatedQueue,
       profile: updatedProfile,
       history: updatedHistory,
-      activeNotification: notification || get().activeNotification
+      activeNotification: notification || get().activeNotification,
+      rankChangeEvent: rankChangeEvent || get().rankChangeEvent
     });
 
     persistState(updatedProfile, activeGoal, savedGoals, updatedQueue, updatedHistory);
@@ -397,6 +404,10 @@ export const useWorkoutStore = create<WorkoutStoreState>((set, get) => ({
 
   showNotification: (alert: NotificationAlert) => {
     set({ activeNotification: alert });
+  },
+
+  clearRankChangeEvent: () => {
+    set({ rankChangeEvent: null });
   },
 
   resetAllData: () => {
