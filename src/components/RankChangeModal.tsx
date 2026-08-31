@@ -90,7 +90,7 @@ export const RankChangeModal: React.FC<RankChangeModalProps> = ({
 }) => {
   const { theme } = useAppTheme();
 
-  const isRankUp = eloDelta >= 0;
+  // All animated refs must be declared before any early return (hooks rule)
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const cardScale = useRef(new Animated.Value(0.4)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
@@ -101,7 +101,22 @@ export const RankChangeModal: React.FC<RankChangeModalProps> = ({
   const arrowOpacity = useRef(new Animated.Value(0)).current;
   const eloCountAnim = useRef(new Animated.Value(0)).current;
 
-  const accentColor = toRank?.color || (isRankUp ? '#22C55E' : '#EF4444');
+  // Rank ordering helpers (safe — computed before any null guard return)
+  const tierOrder = ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Apex Legend'];
+  const divOrder = ['III', 'II', 'I', ''];
+  const fromTierIdx = tierOrder.indexOf(fromRank?.tier ?? '');
+  const toTierIdx = tierOrder.indexOf(toRank?.tier ?? '');
+  const fromDivIdx = divOrder.indexOf(fromRank?.division ?? '');
+  const toDivIdx = divOrder.indexOf(toRank?.division ?? '');
+  const rankIncreased = toTierIdx > fromTierIdx || (toTierIdx === fromTierIdx && toDivIdx > fromDivIdx);
+
+  const rankChanged = rankIncreased || (toTierIdx < fromTierIdx) || (toTierIdx === fromTierIdx && toDivIdx < fromDivIdx);
+  const eloGained = eloDelta >= 0;
+
+  // Accent colour: tier colour on rank change, green/orange on ELO-only change
+  const accentColor = rankChanged
+    ? (toRank?.color ?? '#22C55E')
+    : (eloGained ? '#22C55E' : '#F97316');
 
   useEffect(() => {
     if (!visible) {
@@ -119,10 +134,12 @@ export const RankChangeModal: React.FC<RankChangeModalProps> = ({
 
     // Trigger haptics
     setTimeout(() => {
-      if (isRankUp) {
+      if (rankIncreased) {
         Haptics.notification('success');
-      } else {
+      } else if (!eloGained) {
         Haptics.notification('error');
+      } else {
+        Haptics.impact('medium');
       }
     }, 200);
 
@@ -154,7 +171,7 @@ export const RankChangeModal: React.FC<RankChangeModalProps> = ({
           useNativeDriver: true
         }),
         Animated.timing(iconRotate, {
-          toValue: isRankUp ? 1 : -1,
+          toValue: rankIncreased ? 1 : eloGained ? 0.5 : -1,
           duration: 600,
           easing: Easing.out(Easing.back(2)),
           useNativeDriver: true
@@ -213,9 +230,11 @@ export const RankChangeModal: React.FC<RankChangeModalProps> = ({
           styles.backdrop,
           {
             opacity: backdropOpacity,
-            backgroundColor: isRankUp
+            backgroundColor: rankIncreased
               ? 'rgba(0,0,0,0.88)'
-              : 'rgba(20,0,0,0.90)'
+              : !eloGained
+              ? 'rgba(20,0,0,0.90)'
+              : 'rgba(0,10,20,0.88)'
           }
         ]}
       >
@@ -257,10 +276,18 @@ export const RankChangeModal: React.FC<RankChangeModalProps> = ({
             ]}
           />
 
-          {/* Header: RANK UP / RANK DOWN */}
-          <View style={[styles.headerBadge, { backgroundColor: isRankUp ? '#16A34A' : '#DC2626' }]}>
+          {/* Header badge */}
+          <View style={[styles.headerBadge, {
+            backgroundColor: rankIncreased ? '#16A34A' : !rankChanged && eloGained ? '#2563EB' : '#DC2626'
+          }]}>
             <Text style={styles.headerBadgeText}>
-              {isRankUp ? '⬆ RANK UP' : '⬇ RANK DOWN'}
+              {rankIncreased
+                ? '⬆ PROMOTED'
+                : rankChanged
+                ? '⬇ DEMOTED'
+                : eloGained
+                ? '⬆ MMR GAINED'
+                : '⬇ MMR LOST'}
             </Text>
           </View>
 
@@ -298,11 +325,11 @@ export const RankChangeModal: React.FC<RankChangeModalProps> = ({
               <Text style={[styles.fromPillText, { color: fromRank.color }]}>{fromRank.name}</Text>
             </View>
 
-            <Text style={[styles.transitionArrow, { color: isRankUp ? '#22C55E' : '#EF4444' }]}>
-              {isRankUp ? '→' : '→'}
+            <Text style={[styles.transitionArrow, { color: eloGained ? '#22C55E' : '#EF4444' }]}>
+              →
             </Text>
 
-            <View style={[styles.toPill, { borderColor: accentColor, backgroundColor: isRankUp ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)' }]}>
+            <View style={[styles.toPill, { borderColor: accentColor, backgroundColor: eloGained ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)' }]}>
               <Text style={{ fontSize: 16 }}>{toRank.icon}</Text>
               <Text style={[styles.toPillText, { color: accentColor }]}>{toRank.name}</Text>
             </View>
@@ -313,7 +340,7 @@ export const RankChangeModal: React.FC<RankChangeModalProps> = ({
             <Text
               style={[
                 styles.eloDeltaText,
-                { color: isRankUp ? '#22C55E' : '#EF4444' }
+                { color: eloGained ? '#22C55E' : '#EF4444' }
               ]}
             >
               {eloDelta >= 0 ? '+' : ''}{eloDelta} MMR
@@ -322,9 +349,13 @@ export const RankChangeModal: React.FC<RankChangeModalProps> = ({
 
           {/* Motivational message */}
           <Text style={[styles.motivationText, { color: theme.colors.textSecondary }]}>
-            {isRankUp
-              ? `Outstanding performance! You've climbed to ${toRank.name}. Keep pushing your limits.`
-              : `Tough session. You've dropped to ${toRank.name}. Consistency will bring you back.`}
+            {rankIncreased
+              ? `Outstanding! You've promoted to ${toRank.name}. Keep building momentum.`
+              : rankChanged
+              ? `You've been demoted to ${toRank.name}. Stay consistent — you'll climb back.`
+              : eloGained
+              ? `Nice work! +${eloDelta} MMR at ${toRank.name}. Keep stacking those sessions.`
+              : `You lost ${Math.abs(eloDelta)} MMR. Still at ${toRank.name} — bounce back strong.`}
           </Text>
 
           {/* Dismiss button */}
@@ -337,7 +368,13 @@ export const RankChangeModal: React.FC<RankChangeModalProps> = ({
             activeOpacity={0.88}
           >
             <Text style={styles.dismissBtnText}>
-              {isRankUp ? 'Claim Your Rank! 🏆' : 'Accept & Train Harder'}
+              {rankIncreased
+                ? 'Claim Your Rank! 🏆'
+                : rankChanged
+                ? 'Accept & Train Harder'
+                : eloGained
+                ? 'Keep Going! 💪'
+                : 'Shake It Off 🔥'}
             </Text>
           </TouchableOpacity>
         </Animated.View>

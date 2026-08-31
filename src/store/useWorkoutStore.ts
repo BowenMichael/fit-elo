@@ -190,14 +190,15 @@ export const useWorkoutStore = create<WorkoutStoreState>((set, get) => ({
 
     const newTierInfo = getRankTierInfo(newElo);
     let notification: NotificationAlert | null = null;
-    let rankChangeEvent: { from: RankTierInfo; to: RankTierInfo; eloDelta: number } | null = null;
 
-    if (newTierInfo.tier !== oldTierInfo.tier) {
+    if (newTierInfo.tier !== oldTierInfo.tier || newTierInfo.division !== oldTierInfo.division) {
       notification = createRankUpAlert(oldTierInfo.name, newTierInfo.name);
-      rankChangeEvent = { from: oldTierInfo, to: newTierInfo, eloDelta: delta };
     } else if ([3, 5, 7, 10, 14, 21, 30].includes(newStreak)) {
       notification = createStreakMilestoneAlert(newStreak);
     }
+
+    // Always fire the ELO change modal after every workout
+    const rankChangeEvent = { from: oldTierInfo, to: newTierInfo, eloDelta: delta };
 
     const { updatedQueue } = shiftQueueOnCompletion(queue, workoutId, actualValue, rpe);
 
