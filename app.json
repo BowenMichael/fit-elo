@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "FitElo",
-    "slug": "fit-elo",
+    "slug": "fitelo",
     "scheme": "fit-elo",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -34,8 +34,9 @@
     "extra": {
       "serverUrl": "http://localhost:3001",
       "eas": {
-        "projectId": "your-eas-project-id-here"
+        "projectId": "9653e8f6-8b9c-4575-aff5-840ed8be47aa"
       }
-    }
+    },
+    "owner": "bichaelmowen"
   }
 }
