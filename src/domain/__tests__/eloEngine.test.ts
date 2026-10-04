@@ -104,6 +104,23 @@ describe('ELO MMR Engine & Logarithmic Comeback Returns', () => {
       const day2Grace = calculateActualScore(2.5, 2.5, 5, 2);
       expect(day2Grace.score).toBeLessThan(onTime.score);
     });
+
+    it('handles targetValue <= 0 gracefully returning default baseline score', () => {
+      const res = calculateActualScore(5, 0, 5);
+      expect(res.score).toBe(1.0);
+      expect(res.logarithmicBonus).toBe(0);
+      expect(res.comebackMultiplier).toBe(1.0);
+    });
+
+    it('enforces floor rating of 500 when catastrophic performance causes extreme negative delta', () => {
+      // User with 520 Elo facing an easy 500 difficulty workout, completely failing with 0 actualValue and high RPE
+      // Expected performance for (520 vs 500) is > 0.5. Actual score with 0 actual and RPE 10 is 0.05.
+      // Delta = 32 * (0.05 - 0.53) = -15 -> newElo = 505.
+      // With userElo = 505 and a delta of -15, newElo would be 490 -> clamped to 500!
+      const result = calculateEloDelta(505, 500, 0, 10, 10);
+      expect(result.newElo).toBeGreaterThanOrEqual(500);
+      expect(result.newElo).toBe(500);
+    });
   });
 
   describe('getRankTierInfo', () => {
