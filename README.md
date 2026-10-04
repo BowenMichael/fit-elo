@@ -1,80 +1,62 @@
-# Expo + Socket.IO Full-Stack Starter Template
+# FitElo: Adaptive Workout Tracker
 
-A production-ready, universal starter template for building real-time multiplayer applications, games, and connected dashboards across **Web**, **iOS**, and **Android**.
+FitElo is an adaptive workout and streak tracking system engineered for mobile (iOS / Android) and web. It helps athletes and runners build and sustain habits through dynamic performance evaluation.
 
 ---
 
-## 🚀 Key Features
+## 🚀 Core Value Proposition
 
-- **Universal Cross-Platform (Web + iOS + Android)**: Powered by **Expo SDK 54** and **React Native 0.81**.
-- **Real-Time Signaling & Room Management**: Dedicated Node.js + Express + **Socket.IO** backend with Redis state/cache support.
-- **Docker Compose Watch & Just CLI**: Hot-reloading development container environment syncing code instantaneously across both backend and frontend.
-- **Zustand State Architecture**: Decoupled, high-performance stores for networking, real-time application state, user settings, and persistent statistics.
-- **Production-Ready Metro Web Fixes**: Pre-configured CJS resolver to prevent `import.meta` ESM bundling errors on web deployments.
-- **Full Test Harness**: Configured **Jest** suite with React Native Testing Library and pre-built mocks for Reanimated, Worklets, AsyncStorage, Expo Haptics, and Expo AV.
-- **EAS Cloud Deployment CI/CD**: Pre-configured `eas.json` profiles (development, preview, production, iOS simulator) with automated build & submission recipes.
+1. **Fitness ELO Rating System (MMR)**: Workouts and athletes are assigned dynamic ratings. Performance, completion accuracy, and Rate of Perceived Exertion (RPE) adjust your rating dynamically.
+2. **Relative Day Sequence Queue**: Workouts exist in a relative sequence rather than being anchored to rigid dates.
+3. **Smart Rolling Grace Period**: Missed workouts are held in a grace period (default 3 days), protecting your streak before safely downgrading difficulty to prevent overtraining.
 
 ---
 
 ## 📁 Architecture Overview
 
 ```
-├── assets/                   # App icons, splash screens, audio assets
-├── server/                   # Node.js WebSocket signaling backend
-│   ├── Dockerfile            # Server development container
-│   ├── index.js              # Socket.IO room manager & REST endpoints
-│   ├── package.json          # Server dependencies (Express, Socket.IO, CORS)
-│   └── stress_test.js        # Automated latency & load tester
+├── docs/                     # Documentation, architecture, and roadmap
 ├── src/
-│   ├── components/           # Reusable UI elements (Header, Card, Button)
-│   ├── config/               # Dynamic environment URL resolvers
+│   ├── components/           # Reusable UI elements (Modals, Cards)
+│   ├── domain/               # Core business logic (Elo Engine, Goal Engine)
 │   ├── navigation/           # Lightweight state-driven navigator
-│   ├── network/              # Socket.IO client manager & schemas
-│   ├── screens/              # LobbyScreen, RoomScreen, StatsDashboardScreen
-│   ├── store/                # Zustand stores (Network, Game, Settings, Stats)
-│   ├── theme.ts              # Harmonious HSL color & spacing design system
-│   └── utils/                # Cross-platform audio & haptics managers
+│   ├── screens/              # Dashboard, Goals, History, Settings
+│   ├── store/                # Zustand stores for state management
+│   ├── theme.ts              # Global design system
+│   └── utils/                # Audio & haptics managers
 ├── app.json                  # Expo mobile & web metadata
 ├── eas.json                  # EAS Build & Submit multi-target profiles
-├── docker-compose.yml        # Multi-service setup (server, web, redis)
-├── justfile                  # Multi-platform command task runner
-├── metro.config.js           # Metro bundler with CJS fallback interceptor
 └── package.json              # Client dependencies & scripts
 ```
+
+## 🛠 Tech Stack
+
+- **Client**: Expo SDK 54 / React Native 0.81 (Hermes / JSC on iOS)
+- **Language**: TypeScript
+- **State Management**: Zustand 5
+- **Testing**: Jest with `jest-expo`
+- **Navigation**: React Navigation (within Expo)
 
 ---
 
 ## ⚡ Quick Start
 
-### 1. With Docker & Just (Recommended)
+### Start Expo Web / Mobile
 ```bash
-# Start all services with live hot reloading
-just up
-
-# Follow logs
-just logs
-
-# Run tests
-just test
-
-# Stop containers
-just down
+npm install
+npm run web     # for web
+npm run ios     # for iOS simulator
+npm run android # for Android emulator
 ```
 
-### 2. Without Docker (Direct Node/Expo CLI)
+### Testing
 ```bash
-# 1. Start Backend Server
-cd server
-npm install
-npm run dev
-
-# 2. In a separate terminal, start Expo Web / Mobile
-npm install
-npm run web     # or npm run start
+# Run all unit tests
+npm run test
 ```
 
 ---
 
 ## 📖 Complete Guides
-- **[SETUP.md](SETUP.md)**: Detailed step-by-step developer setup, mobile testing (Expo Go), test suite execution, and customization guide.
-- **[DEPLOYMENT.md](DEPLOYMENT.md)**: Production deployment instructions for Render (Server + Web) and Apple App Store / Google Play via EAS.
+- **[ROADMAP.md](docs/ROADMAP.md)**: Product and technical roadmap.
+- **[ADAPTIVE_WORKOUT_PLAN.md](docs/ADAPTIVE_WORKOUT_PLAN.md)**: Original architecture and plan specifications.
