@@ -36,3 +36,8 @@ android/
 # Temporary & OS files
 .DS_Store
 Thumbs.db
+
+# Agent Worktrees & Execution Logs
+.worktrees/
+test_run.log
+tsc_run.log
